@@ -4,9 +4,9 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * ==============================================================================
  * Kemenag Kabupaten Mojokerto & MGMP PAI SMP Kabupaten Mojokerto
  *
- * FUNGSI:
- * 1. setupSheets()     : Otomatis membuat seluruh Sheet & Header Kolom jika baru dibuat.
- * 2. doPost(e)         : Menerima data kiriman dari aplikasi CBT (Peserta, Jawaban, Nilai).
+ * FITUR LENGKAP:
+ * 1. setupSheets()     : Otomatis membuat seluruh Sheet & Header Kolom.
+ * 2. doPost(e)         : Menerima data kiriman CBT (Hasil Ujian, Bank Soal, Peserta).
  * 3. doGet(e)          : Health check / ping dan pengambilan ringkasan data.
  * ==============================================================================
  */
@@ -122,11 +122,19 @@ function getOrCreateSheet(ss, sheetName) {
 
 /**
  * MENANGANI REQUEST POST DARI APLIKASI CBT
+ * Mendukung JSON string via Fetch maupun Formulir HTML Parameter
  */
 function doPost(e) {
   try {
-    var contents = e.postData.contents;
-    var json = JSON.parse(contents);
+    var json;
+    if (e.parameter && e.parameter.payload) {
+      json = JSON.parse(e.parameter.payload);
+    } else if (e.postData && e.postData.contents) {
+      json = JSON.parse(e.postData.contents);
+    } else {
+      return responseJson({ status: 'error', error: 'Payload tidak ditemukan' });
+    }
+
     var action = json.action;
     var data = json.data;
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -148,6 +156,11 @@ function doPost(e) {
     if (action === 'SYNC_VIOLATION') {
       saveViolation(ss, data);
       return responseJson({ status: 'ok', message: 'Log pelanggaran tersimpan' });
+    }
+
+    if (action === 'SYNC_QUESTIONS') {
+      saveQuestions(ss, data);
+      return responseJson({ status: 'ok', message: 'Bank soal tersimpan' });
     }
 
     if (action === 'EXPORT_ALL') {
@@ -209,7 +222,7 @@ function saveOrUpdateParticipant(ss, p) {
   }
 }
 
-// Simpan Nilai Hasil Ujian
+// Simpan Nilai Hasil Ujian Siswa
 function saveResult(ss, r, p) {
   var sheet = getOrCreateSheet(ss, SHEET_HASIL);
   var durationMin = Math.round(r.durationSeconds / 60);
@@ -234,6 +247,46 @@ function saveResult(ss, r, p) {
   ]);
 }
 
+// Simpan Seluruh Bank Soal ke Spreadsheet
+function saveQuestions(ss, questions) {
+  if (!questions || questions.length === 0) return;
+  var sheet = getOrCreateSheet(ss, SHEET_BANK_SOAL);
+
+  // Bersihkan baris lama di bawah header
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, 11).clearContent();
+  }
+
+  var rows = questions.map(function(q) {
+    var optA = '', optB = '', optC = '', optD = '';
+    (q.options || []).forEach(function(o) {
+      if (o.id === 'A') optA = o.text;
+      if (o.id === 'B') optB = o.text;
+      if (o.id === 'C') optC = o.text;
+      if (o.id === 'D') optD = o.text;
+    });
+
+    return [
+      q.id,
+      q.type || 'PG',
+      q.topic || q.subject || 'PAI',
+      q.difficulty || 'Sedang',
+      q.question || '',
+      optA,
+      optB,
+      optC,
+      optD,
+      (q.correctAnswers || []).join(', '),
+      q.explanation || '-'
+    ];
+  });
+
+  if (rows.length > 0) {
+    sheet.getRange(2, 1, rows.length, 11).setValues(rows);
+  }
+}
+
 // Simpan Pelanggaran
 function saveViolation(ss, v) {
   var sheet = getOrCreateSheet(ss, SHEET_PELANGGARAN);
@@ -249,17 +302,19 @@ function saveViolation(ss, v) {
   ]);
 }
 
-// Ekspor Seluruh Data Sekaligus
+// Ekspor Seluruh Data Sekaligus (Peserta, Hasil, Bank Soal)
 function exportAllData(ss, data) {
+  if (data.questions && data.questions.length > 0) {
+    saveQuestions(ss, data.questions);
+  }
+
   if (data.participants && data.participants.length > 0) {
-    var pSheet = getOrCreateSheet(ss, SHEET_PESERTA);
     data.participants.forEach(function(p) {
       saveOrUpdateParticipant(ss, p);
     });
   }
 
   if (data.results && data.results.length > 0) {
-    var rSheet = getOrCreateSheet(ss, SHEET_HASIL);
     data.results.forEach(function(r) {
       saveResult(ss, r);
     });

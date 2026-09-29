@@ -1,4 +1,4 @@
-import { Participant, ExamResult, ViolationLog } from '../types';
+import { Participant, ExamResult, ViolationLog, Question } from '../types';
 
 export const DEFAULT_APPS_SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbzqWOwYOggXLgLmlCi_Gqm8DReSPxwEgKUtsJGoLgrkWn3o5cak9nhiXPB0YVJ-TP1Drg/exec';
@@ -25,33 +25,68 @@ export const sheetsSyncService = {
 
   /**
    * Mengirim payload ke Google Apps Script Web App
-   * Menggunakan Content-Type text/plain agar bebas dari CORS preflight di browser
+   * Menggunakan kombinasi Fetch text/plain dan Form Post tersembunyi
+   * Form Post penting agar cookie sesi login Google (termasuk akun belajar.id) ikut terkirim
    */
   async sendPayload(action: string, data: any): Promise<boolean> {
     const url = this.getUrl();
     if (!url) return false;
 
-    try {
-      const payload = {
-        action,
-        timestamp: new Date().toISOString(),
-        data,
-      };
+    const payload = {
+      action,
+      timestamp: new Date().toISOString(),
+      data,
+    };
+    const jsonString = JSON.stringify(payload);
 
+    // 1. Kirim via Fetch text/plain (bebas CORS preflight)
+    try {
       await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/plain;charset=utf-8',
         },
-        body: JSON.stringify(payload),
+        body: jsonString,
         mode: 'no-cors',
       });
-
-      return true;
     } catch (err) {
-      console.warn('Gagal sinkronisasi ke Google Apps Script:', err);
-      return false;
+      console.warn('Sync via fetch warning:', err);
     }
+
+    // 2. Kirim via Hidden HTML Form Submit
+    // Ini mengikutsertakan sesi akun Google yang sedang aktif di browser
+    try {
+      if (typeof document !== 'undefined') {
+        let iframe = document.getElementById('gscript_sync_iframe') as HTMLIFrameElement;
+        if (!iframe) {
+          iframe = document.createElement('iframe');
+          iframe.id = 'gscript_sync_iframe';
+          iframe.name = 'gscript_sync_iframe';
+          iframe.style.display = 'none';
+          document.body.appendChild(iframe);
+        }
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = url;
+        form.target = 'gscript_sync_iframe';
+        form.style.display = 'none';
+
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'payload';
+        input.value = jsonString;
+        form.appendChild(input);
+
+        document.body.appendChild(form);
+        form.submit();
+        setTimeout(() => form.remove(), 2500);
+      }
+    } catch (err) {
+      console.warn('Sync via form submit warning:', err);
+    }
+
+    return true;
   },
 
   async testConnection(testUrl: string): Promise<boolean> {
@@ -93,6 +128,11 @@ export const sheetsSyncService = {
   async syncViolation(violation: ViolationLog) {
     if (!this.isConfigured()) return;
     return this.sendPayload('SYNC_VIOLATION', violation);
+  },
+
+  async syncQuestions(questions: Question[]) {
+    if (!this.isConfigured()) return;
+    return this.sendPayload('SYNC_QUESTIONS', questions);
   },
 
   async exportAll(payloadData: {

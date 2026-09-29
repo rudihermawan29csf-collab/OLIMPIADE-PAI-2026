@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { isFirebaseConfigured, firebaseEnvConfig } from '../firebase/firebaseConfig';
 import { storageService, DEFAULT_ORG_SETTINGS } from '../services/storageService';
 import { sheetsSyncService } from '../services/sheetsSyncService';
+import { sheetsExportService } from '../services/sheetsExportService';
 import { GOOGLE_APPS_SCRIPT_CODE } from '../constants/googleAppsScriptCode';
 import { LOGO_KEMENAG_MOJOKERTO, LOGO_MGMP_PAI_MOJOKERTO } from '../constants/branding';
 import { useToast } from '../components/Toast';
@@ -24,7 +25,10 @@ import {
   Layers,
   Sparkles,
   Building2,
-  MapPin
+  MapPin,
+  Download,
+  Table,
+  ClipboardCheck
 } from 'lucide-react';
 
 export const AdminSettings: React.FC = () => {
@@ -107,11 +111,43 @@ export const AdminSettings: React.FC = () => {
         questions,
       });
 
-      showToast('Seluruh data peserta dan hasil ujian berhasil dikirim ke Google Sheets!', 'success');
+      showToast('Seluruh data peserta, hasil ujian, dan bank soal berhasil dikirim!', 'success');
     } catch (err: any) {
       showToast('Gagal mengekspor data ke Google Sheets.', 'error');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const [copiedResults, setCopiedResults] = useState(false);
+  const [copiedQuestions, setCopiedQuestions] = useState(false);
+
+  const handleDownloadExcel = () => {
+    const success = sheetsExportService.exportToExcel();
+    if (success) {
+      showToast('File spreadsheet (.xlsx) lengkap berhasil diunduh! Siap dibuka di Google Drive/Google Sheets.', 'success');
+    } else {
+      showToast('Gagal mengunduh file spreadsheet.', 'error');
+    }
+  };
+
+  const handleCopyResults = () => {
+    if (navigator.clipboard) {
+      const text = sheetsExportService.copyResultsToClipboard();
+      navigator.clipboard.writeText(text);
+      setCopiedResults(true);
+      showToast('Data Hasil Ujian berhasil disalin! Buka Google Sheets tab HASIL_UJIAN lalu tekan Ctrl+V', 'success');
+      setTimeout(() => setCopiedResults(false), 3000);
+    }
+  };
+
+  const handleCopyQuestions = () => {
+    if (navigator.clipboard) {
+      const text = sheetsExportService.copyQuestionsToClipboard();
+      navigator.clipboard.writeText(text);
+      setCopiedQuestions(true);
+      showToast('Data Bank Soal berhasil disalin! Buka Google Sheets tab BANK_SOAL lalu tekan Ctrl+V', 'success');
+      setTimeout(() => setCopiedQuestions(false), 3000);
     }
   };
 
@@ -344,7 +380,7 @@ export const AdminSettings: React.FC = () => {
               placeholder="https://script.google.com/macros/s/AKfycbx.../exec"
               className="flex-1 p-2.5 rounded-lg border border-slate-300 text-xs font-mono text-slate-900 focus:outline-none focus:border-[#087443] focus:ring-1 focus:ring-[#087443] bg-white"
             />
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={handleSaveUrl}
@@ -361,26 +397,133 @@ export const AdminSettings: React.FC = () => {
                 <Send className="w-3.5 h-3.5" />
                 <span>{isTesting ? 'Menguji...' : 'Tes Koneksi'}</span>
               </button>
+              {appsScriptUrl && (
+                <a
+                  href={appsScriptUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 px-3 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+                  title="Cek respons langsung dari Google di tab baru"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Buka di Tab Baru</span>
+                </a>
+              )}
             </div>
           </div>
 
-          {isConfigured && (
+          {/* DIAGNOSIS KONEKSI APPS SCRIPT */}
+          <div className="p-3.5 bg-amber-50/80 border border-amber-300 rounded-xl text-xs space-y-2">
+            <div className="flex items-center gap-2 font-bold text-amber-950">
+              <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+              <span>PENTING: Jika Data Belum Masuk ke Spreadsheet Anda</span>
+            </div>
+            <p className="text-amber-900 leading-relaxed">
+              Google Apps Script saat ini merespons dengan status <em>&quot;Sorry, unable to open the file at present&quot;</em> atau meminta login Google. Hal ini terjadi karena salah satu dari 3 hal berikut:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1 text-[11px]">
+              <div className="p-2.5 bg-white rounded-lg border border-amber-200">
+                <span className="font-bold text-amber-950 block mb-1">1. Belum Beri Izin (Run)</span>
+                <span className="text-slate-600 leading-relaxed block">
+                  Di Apps Script, pilih fungsi <strong>setupSheets</strong> lalu klik <strong>Jalankan (Run)</strong> dan klik <strong>Izinkan (Allow)</strong> otorisasi akun.
+                </span>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-amber-200">
+                <span className="font-bold text-amber-950 block mb-1">2. Akses Belum &quot;Anyone&quot;</span>
+                <span className="text-slate-600 leading-relaxed block">
+                  Klik <strong>Deploy &gt; Kelola deployment &gt; Edit &gt; Versi Baru</strong>. Pastikan <em>Who has access</em> dipilih <strong>Siapa saja (Anyone)</strong>.
+                </span>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-amber-200">
+                <span className="font-bold text-amber-950 block mb-1">3. Akun belajar.id Dikunci</span>
+                <span className="text-slate-600 leading-relaxed block">
+                  Jika akun <em>@guru.smp.belajar.id</em> mengunci akses luar, buat spreadsheet baru di <strong>akun @gmail.com pribadi</strong> yang bebas izin publik.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* OPSI EKSPOR DATA KE GOOGLE SPREADSHEET */}
+          <div className="pt-3 border-t border-slate-200/80 space-y-3">
+            <span className="block text-xs font-bold text-slate-900 flex items-center gap-1.5">
+              <Table className="w-4 h-4 text-[#087443]" />
+              <span>Opsi Kirim & Ekspor Data Hasil Ujian & Bank Soal ke Spreadsheet:</span>
+            </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              {/* Card Opsi 1: Unduh File .xlsx Langsung */}
+              <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200 flex flex-col justify-between">
+                <div>
+                  <span className="font-bold text-emerald-950 flex items-center gap-1.5 mb-1">
+                    <Download className="w-4 h-4 text-emerald-700" />
+                    <span>Unduh File Spreadsheet (.xlsx)</span>
+                    <span className="text-[9px] bg-emerald-200 text-emerald-900 font-bold px-1.5 py-0.5 rounded">
+                      100% Berhasil
+                    </span>
+                  </span>
+                  <p className="text-[11px] text-slate-600 mb-3 leading-relaxed">
+                    Unduh file Excel berisi seluruh 5 sheet (<strong>HASIL_UJIAN</strong>, <strong>BANK_SOAL</strong>, <strong>PESERTA</strong>, <strong>SESI_UJIAN</strong>, <strong>PELANGGARAN</strong>). File ini bisa langsung dibuka atau diunggah ke Google Drive Anda tanpa kendala izin script!
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadExcel}
+                  className="w-full py-2 px-3 bg-[#087443] hover:bg-[#065b34] text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-2xs"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh File Spreadsheet Lengkap</span>
+                </button>
+              </div>
+
+              {/* Card Opsi 2: Salin ke Clipboard (Tinggal Ctrl+V) */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col justify-between">
+                <div>
+                  <span className="font-bold text-slate-900 flex items-center gap-1.5 mb-1">
+                    <ClipboardCheck className="w-4 h-4 text-slate-700" />
+                    <span>Salin Data ke Clipboard (Tinggal Ctrl + V)</span>
+                  </span>
+                  <p className="text-[11px] text-slate-600 mb-3 leading-relaxed">
+                    Salin baris dan kolom rapi ke memori clipboard. Anda cukup membuka Google Sheets Anda dan menekan <strong>Ctrl + V</strong> di kolom paling atas!
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyResults}
+                    className="py-1.5 px-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-semibold rounded-lg text-[11px] flex items-center justify-center gap-1 transition cursor-pointer"
+                  >
+                    <Copy className="w-3 h-3 text-slate-500" />
+                    <span>{copiedResults ? 'Disalin!' : 'Salin Hasil Ujian'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyQuestions}
+                    className="py-1.5 px-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-semibold rounded-lg text-[11px] flex items-center justify-center gap-1 transition cursor-pointer"
+                  >
+                    <Copy className="w-3 h-3 text-slate-500" />
+                    <span>{copiedQuestions ? 'Disalin!' : 'Salin Bank Soal'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Tombol Sinkronisasi ke Web App */}
             <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-              <span className="text-emerald-800 flex items-center gap-1.5 font-medium">
+              <span className="text-slate-600 flex items-center gap-1.5 font-medium">
                 <Check className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Aplikasi siap mengirim data secara real-time ke Google Spreadsheet Anda.</span>
+                <span>Kirim otomatis via Web App Google Apps Script:</span>
               </span>
               <button
                 type="button"
                 onClick={handleExportAll}
                 disabled={isExporting}
-                className="py-1.5 px-3 bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-bold rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                className="py-2 px-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shadow-xs"
               >
-                <Sparkles className="w-3.5 h-3.5 text-emerald-800" />
-                <span>{isExporting ? 'Mengekspor...' : 'Sinkronkan Semua Data Sekarang'}</span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>{isExporting ? 'Mengekspor...' : 'Kirim Soal & Hasil ke Web App Sekarang'}</span>
               </button>
             </div>
-          )}
+          </div>
         </div>
 
         {/* PANDUAN STRUKTUR SPREADSHEET & KODE APPS SCRIPT */}

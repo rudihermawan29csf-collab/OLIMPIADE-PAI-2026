@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { storageService } from '../services/storageService';
 import { excelUtils } from '../utils/excelUtils';
+import { sheetsSyncService } from '../services/sheetsSyncService';
+import { sheetsExportService } from '../services/sheetsExportService';
 import { useToast } from '../components/Toast';
 import {
   Award,
@@ -8,7 +10,9 @@ import {
   Search,
   CheckCircle2,
   XCircle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Send,
+  Copy
 } from 'lucide-react';
 
 export const AdminResults: React.FC = () => {
@@ -54,6 +58,38 @@ export const AdminResults: React.FC = () => {
     }
   };
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncToSheets = async () => {
+    setIsSyncing(true);
+    try {
+      const participants = storageService.getParticipants();
+      const allResults = storageService.getResults();
+      const exams = storageService.getExams();
+      const questions = storageService.getQuestions();
+
+      await sheetsSyncService.exportAll({
+        participants,
+        results: allResults,
+        exams,
+        questions,
+      });
+      showToast(`${results.length} data hasil ujian & bank soal berhasil dikirim ke Google Spreadsheet!`, 'success');
+    } catch {
+      showToast('Gagal mengirim data ke Google Spreadsheet.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleCopyResults = () => {
+    if (navigator.clipboard) {
+      const text = sheetsExportService.copyResultsToClipboard();
+      navigator.clipboard.writeText(text);
+      showToast('Data Hasil Ujian disalin! Buka Google Sheets tab HASIL_UJIAN lalu tekan Ctrl+V', 'success');
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -72,12 +108,33 @@ export const AdminResults: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={handleCopyResults}
+            className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer"
+            title="Salin tabel hasil ujian ke clipboard untuk di-paste langsung (Ctrl+V) ke Google Sheets"
+          >
+            <Copy className="w-3.5 h-3.5 text-slate-500" />
+            <span>Salin (Ctrl+V)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSyncToSheets}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-50"
+            title="Kirim semua data hasil ujian ke Google Spreadsheet via Web App"
+          >
+            <Send className="w-3.5 h-3.5 text-emerald-700" />
+            <span>{isSyncing ? 'Mengirim...' : 'Kirim ke Spreadsheet'}</span>
+          </button>
+
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-3.5 py-2 rounded-lg text-xs font-medium transition cursor-pointer"
+            className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer"
           >
-            <Printer className="w-4 h-4 text-slate-500" />
+            <Printer className="w-3.5 h-3.5 text-slate-500" />
             <span>Cetak / PDF</span>
           </button>
 

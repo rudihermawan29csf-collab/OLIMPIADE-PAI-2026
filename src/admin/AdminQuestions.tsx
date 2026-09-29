@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Question, MateriPAI, Difficulty, QuestionType } from '../types';
 import { storageService, subscribeToStore } from '../services/storageService';
+import { sheetsSyncService } from '../services/sheetsSyncService';
+import { sheetsExportService } from '../services/sheetsExportService';
 import { AdminQuestionForm } from './AdminQuestionForm';
 import { useToast } from '../components/Toast';
 import {
@@ -9,7 +11,9 @@ import {
   Search,
   Copy,
   Trash2,
-  Edit3
+  Edit3,
+  Send,
+  FileSpreadsheet
 } from 'lucide-react';
 
 const MATERI_LIST = [
@@ -81,6 +85,28 @@ export const AdminQuestions: React.FC = () => {
     return matchSearch && matchMateri && matchDiff && matchType;
   });
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncToSheets = async () => {
+    setIsSyncing(true);
+    try {
+      await sheetsSyncService.syncQuestions(questions);
+      showToast(`${questions.length} butir soal berhasil dikirim ke Google Spreadsheet!`, 'success');
+    } catch {
+      showToast('Gagal mengirim soal ke Google Spreadsheet.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleCopyQuestions = () => {
+    if (navigator.clipboard) {
+      const text = sheetsExportService.copyQuestionsToClipboard();
+      navigator.clipboard.writeText(text);
+      showToast('Data Bank Soal berhasil disalin! Buka Google Sheets tab BANK_SOAL lalu tekan Ctrl+V', 'success');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -95,16 +121,39 @@ export const AdminQuestions: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setEditingQuestion(null);
-            setIsFormOpen(true);
-          }}
-          className="flex items-center gap-2 bg-[#087443] hover:bg-[#065b34] text-white px-4 py-2.5 rounded-lg font-medium text-xs shadow-xs transition self-start sm:self-auto cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Tambah Soal Baru</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={handleCopyQuestions}
+            className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-2 rounded-lg font-medium text-xs shadow-2xs transition cursor-pointer"
+            title="Salin semua butir soal ke clipboard untuk di-paste langsung (Ctrl+V) ke Google Sheets"
+          >
+            <Copy className="w-3.5 h-3.5 text-slate-500" />
+            <span>Salin Format Sheets (Ctrl+V)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSyncToSheets}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 px-3.5 py-2 rounded-lg font-bold text-xs transition cursor-pointer disabled:opacity-50"
+            title="Kirim seluruh butir soal ke Google Spreadsheet via Web App"
+          >
+            <Send className="w-3.5 h-3.5 text-emerald-700" />
+            <span>{isSyncing ? 'Mengirim...' : 'Kirim Soal ke Spreadsheet'}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setEditingQuestion(null);
+              setIsFormOpen(true);
+            }}
+            className="flex items-center gap-2 bg-[#087443] hover:bg-[#065b34] text-white px-4 py-2 rounded-lg font-medium text-xs shadow-xs transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Tambah Soal Baru</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
