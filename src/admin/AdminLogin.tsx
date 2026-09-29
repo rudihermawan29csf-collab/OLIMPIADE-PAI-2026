@@ -1,9 +1,24 @@
 import React, { useState } from 'react';
-import { KeyRound, Mail, ArrowLeft, ArrowRight, ShieldCheck, ChevronDown, Sparkles } from 'lucide-react';
+import {
+  KeyRound,
+  Mail,
+  ArrowLeft,
+  ArrowRight,
+  ShieldCheck,
+  ChevronDown,
+  Sparkles,
+  MapPin,
+  Building2,
+  X,
+  Check,
+  RotateCcw
+} from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { AdminUser } from '../types';
+import { AdminUser, OrgSettings } from '../types';
 import { DEMO_ADMINS } from '../services/seedData';
+import { storageService, DEFAULT_ORG_SETTINGS } from '../services/storageService';
 import { LOGO_KEMENAG_MOJOKERTO, LOGO_MGMP_PAI_MOJOKERTO } from '../constants/branding';
+import { useToast } from '../components/Toast';
 
 interface AdminLoginProps {
   onSuccess: (user: AdminUser) => void;
@@ -12,6 +27,7 @@ interface AdminLoginProps {
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onBack }) => {
   const { loginAdmin } = useAuth();
+  const { showToast } = useToast();
   const defaultAdminEmail = 'admin@mgmppai-mojokerto.sch.id';
 
   // Otomatis terisi pilihan akun login admin
@@ -20,6 +36,15 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onBack }) => 
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Modal Atur Nama & Alamat Sekretariat
+  const [isOrgModalOpen, setIsOrgModalOpen] = useState(false);
+  const [orgSettings, setOrgSettings] = useState<OrgSettings>(() => storageService.getOrgSettings());
+
+  // Form State dalam Modal
+  const [formOffice, setFormOffice] = useState(orgSettings.officeName);
+  const [formOrg, setFormOrg] = useState(orgSettings.organizationName);
+  const [formAddress, setFormAddress] = useState(orgSettings.secretariatAddress);
 
   // Handle Preset Selection via Dropdown
   const handleDropdownChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -70,30 +95,70 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onBack }) => 
     }
   };
 
-  const currentAdminPreset = DEMO_ADMINS.find((a) => a.email.toLowerCase() === email.trim().toLowerCase());
+  const handleSaveOrgSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated = storageService.saveOrgSettings({
+      officeName: formOffice.trim(),
+      organizationName: formOrg.trim(),
+      secretariatAddress: formAddress.trim(),
+    });
+    setOrgSettings(updated);
+    setIsOrgModalOpen(false);
+    showToast('Identitas lembaga dan alamat sekretariat berhasil disimpan!', 'success');
+  };
+
+  const handleResetOrgSettings = () => {
+    setFormOffice(DEFAULT_ORG_SETTINGS.officeName);
+    setFormOrg(DEFAULT_ORG_SETTINGS.organizationName);
+    setFormAddress(DEFAULT_ORG_SETTINGS.secretariatAddress);
+    storageService.saveOrgSettings(DEFAULT_ORG_SETTINGS);
+    setOrgSettings(DEFAULT_ORG_SETTINGS);
+    showToast('Identitas dan alamat sekretariat dikembalikan ke default.', 'info');
+  };
+
+  const currentAdminPreset = DEMO_ADMINS.find(
+    (a) => a.email.toLowerCase() === email.trim().toLowerCase()
+  );
 
   return (
     <div className="min-h-[calc(100vh-65px)] flex items-center justify-center p-4 sm:p-8 bg-[#F8FAF8]">
-      <div className="bg-white rounded-xl max-w-lg w-full p-6 sm:p-8 shadow-xs border border-emerald-950/10">
-        
-        {/* Back Button */}
-        <button
-          onClick={onBack}
-          type="button"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-emerald-800 mb-5 transition cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Kembali ke Halaman Peserta</span>
-        </button>
+      <div className="bg-white rounded-xl max-w-lg w-full p-6 sm:p-8 shadow-xs border border-emerald-950/10 relative">
+        {/* Top Bar: Back & Settings */}
+        <div className="flex items-center justify-between mb-5">
+          <button
+            onClick={onBack}
+            type="button"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-emerald-800 transition cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Kembali ke Halaman Peserta</span>
+          </button>
 
-        {/* Header */}
+          {/* Tombol Atur Nama & Alamat Sekretariat */}
+          <button
+            type="button"
+            onClick={() => {
+              setFormOffice(orgSettings.officeName);
+              setFormOrg(orgSettings.organizationName);
+              setFormAddress(orgSettings.secretariatAddress);
+              setIsOrgModalOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#087443] hover:text-[#065b34] bg-[#EAF8F0] hover:bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-300 transition cursor-pointer"
+            title="Atur Nama Organisasi & Alamat Sekretariat"
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            <span>Atur Sekretariat</span>
+          </button>
+        </div>
+
+        {/* Header dengan Logo yang Sesuai di Aplikasi */}
         <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <div className="inline-block p-1 bg-white rounded-full border border-emerald-900/20 shadow-xs">
+          <div className="flex items-center justify-center gap-3.5 mb-3">
+            <div className="inline-block p-1.5 bg-white rounded-2xl border border-emerald-900/20 shadow-xs">
               <img
                 src={LOGO_KEMENAG_MOJOKERTO}
                 alt="Kemenag Kab. Mojokerto"
-                className="w-12 h-12 object-contain p-0.5"
+                className="w-12 h-12 object-contain"
               />
             </div>
             <div className="inline-block p-1 bg-white rounded-full border border-emerald-900/20 shadow-xs">
@@ -104,9 +169,13 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onBack }) => 
               />
             </div>
           </div>
+
           <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Login Admin & Proktor</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Kemenag Kab. Mojokerto • MGMP PAI • Portal CBT
+          <p className="text-xs font-semibold text-emerald-800 mt-1">
+            {orgSettings.organizationName}
+          </p>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            {orgSettings.officeName}
           </p>
         </div>
 
@@ -204,10 +273,141 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onBack }) => 
           </button>
         </form>
 
-        <div className="mt-6 pt-4 border-t border-slate-100 text-center text-xs text-slate-400">
-          Sistem Terotentikasi MGMP PAI Kabupaten Mojokerto
+        {/* Footer: Alamat Sekretariat & Branding */}
+        <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+          <div className="flex items-start justify-center gap-1.5 text-[11px] text-slate-500 max-w-sm mx-auto">
+            <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" />
+            <span className="leading-tight">{orgSettings.secretariatAddress}</span>
+          </div>
+          <div className="mt-2 text-[10px] text-slate-400">
+            Portal Resmi CBT Musyawarah Guru Mata Pelajaran PAI SMP Kab. Mojokerto
+          </div>
         </div>
       </div>
+
+      {/* MODAL PENGATURAN IDENTITAS & ALAMAT SEKRETARIAT */}
+      {isOrgModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2 text-slate-900 font-bold text-base">
+                <Building2 className="w-5 h-5 text-[#087443]" />
+                <span>Pengaturan Identitas & Alamat Sekretariat</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOrgModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Preview Logo yang Sesuai di Aplikasi */}
+            <div className="p-3.5 bg-[#FAFDFB] rounded-xl border border-emerald-900/15 mb-4">
+              <span className="block text-[11px] font-bold text-emerald-950 uppercase tracking-wide mb-2">
+                Logo Resmi Terpasang di Aplikasi & Kop Ujian
+              </span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200">
+                  <img
+                    src={LOGO_KEMENAG_MOJOKERTO}
+                    alt="Logo Kemenag"
+                    className="w-8 h-8 object-contain"
+                  />
+                  <span className="text-[11px] font-semibold text-slate-700">Kemenag Mojokerto</span>
+                </div>
+                <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200">
+                  <img
+                    src={LOGO_MGMP_PAI_MOJOKERTO}
+                    alt="Logo MGMP"
+                    className="w-8 h-8 rounded-full object-cover"
+                  />
+                  <span className="text-[11px] font-semibold text-slate-700">MGMP PAI SMP</span>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-2">
+                *Kedua logo di atas otomatis dicantumkan pada antarmuka aplikasi dan dokumen PDF hasil ujian siswa.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveOrgSettings} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nama Kantor Kemenag Daerah
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formOffice}
+                  onChange={(e) => setFormOffice(e.target.value)}
+                  placeholder="KANTOR KEMENTERIAN AGAMA KABUPATEN MOJOKERTO"
+                  className="w-full p-2.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#087443] focus:ring-1 focus:ring-[#087443]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nama Organisasi MGMP
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formOrg}
+                  onChange={(e) => setFormOrg(e.target.value)}
+                  placeholder="MUSYAWARAH GURU MATA PELAJARAN (MGMP) PAI SMP"
+                  className="w-full p-2.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#087443] focus:ring-1 focus:ring-[#087443]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Alamat Lengkap Sekretariat & Kontak
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={formAddress}
+                  onChange={(e) => setFormAddress(e.target.value)}
+                  placeholder="Jl. Kedungmungal No. 1, Kab. Mojokerto, Jawa Timur 61382 • Email: mgmppai.mojokerto@gmail.com"
+                  className="w-full p-2.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#087443] focus:ring-1 focus:ring-[#087443]"
+                />
+                <span className="text-[10px] text-slate-500">
+                  Alamat ini akan dicetak pada Kop Surat Dokumen PDF dan halaman utama login.
+                </span>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetOrgSettings}
+                  className="py-2 px-3 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg text-xs font-medium transition flex items-center gap-1 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset Default</span>
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsOrgModalOpen(false)}
+                    className="py-2 px-3.5 border border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-medium text-slate-700 transition cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="py-2 px-4 bg-[#087443] hover:bg-[#065b34] text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Simpan Pengaturan</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

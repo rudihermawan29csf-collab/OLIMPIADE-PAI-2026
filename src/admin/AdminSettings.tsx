@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { isFirebaseConfigured, firebaseEnvConfig } from '../firebase/firebaseConfig';
-import { storageService } from '../services/storageService';
+import { storageService, DEFAULT_ORG_SETTINGS } from '../services/storageService';
 import { sheetsSyncService } from '../services/sheetsSyncService';
 import { GOOGLE_APPS_SCRIPT_CODE } from '../constants/googleAppsScriptCode';
+import { LOGO_KEMENAG_MOJOKERTO, LOGO_MGMP_PAI_MOJOKERTO } from '../constants/branding';
 import { useToast } from '../components/Toast';
 import {
   Settings,
@@ -21,11 +22,19 @@ import {
   ChevronDown,
   ChevronUp,
   Layers,
-  Sparkles
+  Sparkles,
+  Building2,
+  MapPin
 } from 'lucide-react';
 
 export const AdminSettings: React.FC = () => {
   const { showToast } = useToast();
+
+  // Organization & Secretariat State
+  const [orgSettings, setOrgSettings] = useState(() => storageService.getOrgSettings());
+  const [officeName, setOfficeName] = useState(orgSettings.officeName);
+  const [organizationName, setOrganizationName] = useState(orgSettings.organizationName);
+  const [secretariatAddress, setSecretariatAddress] = useState(orgSettings.secretariatAddress);
 
   // Apps Script URL state
   const [appsScriptUrl, setAppsScriptUrl] = useState(() => sheetsSyncService.getUrl());
@@ -34,6 +43,26 @@ export const AdminSettings: React.FC = () => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [showCodePreview, setShowCodePreview] = useState(false);
   const [showGuide, setShowGuide] = useState(true);
+
+  const handleSaveOrg = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated = storageService.saveOrgSettings({
+      officeName: officeName.trim(),
+      organizationName: organizationName.trim(),
+      secretariatAddress: secretariatAddress.trim(),
+    });
+    setOrgSettings(updated);
+    showToast('Identitas lembaga dan alamat sekretariat berhasil disimpan!', 'success');
+  };
+
+  const handleResetOrg = () => {
+    setOfficeName(DEFAULT_ORG_SETTINGS.officeName);
+    setOrganizationName(DEFAULT_ORG_SETTINGS.organizationName);
+    setSecretariatAddress(DEFAULT_ORG_SETTINGS.secretariatAddress);
+    storageService.saveOrgSettings(DEFAULT_ORG_SETTINGS);
+    setOrgSettings(DEFAULT_ORG_SETTINGS);
+    showToast('Identitas lembaga & alamat sekretariat dikembalikan ke default.', 'info');
+  };
 
   const handleSaveUrl = () => {
     sheetsSyncService.setUrl(appsScriptUrl);
@@ -114,11 +143,140 @@ export const AdminSettings: React.FC = () => {
       <div>
         <h2 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
           <Settings className="w-5 h-5 text-[#087443]" />
-          <span>Pengaturan Sistem & Integrasi Database</span>
+          <span>Pengaturan Sistem & Identitas Lembaga</span>
         </h2>
         <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-          Kelola sinkronisasi otomatis Google Spreadsheet, Apps Script Webhook, dan penyimpanan Cloud.
+          Kelola nama lembaga, alamat sekretariat, logo resmi, dan integrasi sinkronisasi database.
         </p>
+      </div>
+
+      {/* CARD 0: IDENTITAS LEMBAGA, ALAMAT SEKRETARIAT & LOGO */}
+      <div className="bg-white rounded-xl p-5 sm:p-6 border border-emerald-950/10 shadow-xs space-y-5">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-[#EAF8F0] text-[#087443] flex items-center justify-center">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <span>Identitas Lembaga & Alamat Sekretariat</span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded uppercase">
+                  Kop Dokumen CBT
+                </span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Atur nama instansi, organisasi MGMP, dan alamat sekretariat yang tampil di aplikasi dan dokumen PDF siswa
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Preview Logo yang Sesuai di Aplikasi */}
+        <div className="p-4 bg-[#FAFDFB] rounded-xl border border-emerald-900/15">
+          <span className="block text-xs font-bold text-emerald-950 mb-2.5 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Logo Resmi Aplikasi & Kop Surat Ujian</span>
+          </span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+              <div className="w-12 h-12 rounded-lg bg-emerald-50/50 border border-emerald-100 flex items-center justify-center p-1 shrink-0">
+                <img
+                  src={LOGO_KEMENAG_MOJOKERTO}
+                  alt="Logo Kemenag Mojokerto"
+                  className="w-10 h-10 object-contain"
+                />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-900 block">Kemenag Kab. Mojokerto</span>
+                <span className="text-[11px] text-slate-500">Logo resmi Kementerian Agama Kab. Mojokerto</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+              <div className="w-12 h-12 rounded-full bg-emerald-50/50 border border-emerald-100 flex items-center justify-center overflow-hidden shrink-0">
+                <img
+                  src={LOGO_MGMP_PAI_MOJOKERTO}
+                  alt="Logo MGMP PAI Mojokerto"
+                  className="w-12 h-12 object-cover"
+                />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-900 block">MGMP PAI SMP Kab. Mojokerto</span>
+                <span className="text-[11px] text-slate-500">Logo resmi MGMP Pendidikan Agama Islam</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Form Pengaturan Nama & Alamat */}
+        <form onSubmit={handleSaveOrg} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Nama Kantor Kemenag Daerah
+              </label>
+              <input
+                type="text"
+                required
+                value={officeName}
+                onChange={(e) => setOfficeName(e.target.value)}
+                placeholder="KANTOR KEMENTERIAN AGAMA KABUPATEN MOJOKERTO"
+                className="w-full p-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-[#087443] focus:ring-1 focus:ring-[#087443] bg-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Nama Organisasi MGMP
+              </label>
+              <input
+                type="text"
+                required
+                value={organizationName}
+                onChange={(e) => setOrganizationName(e.target.value)}
+                placeholder="MUSYAWARAH GURU MATA PELAJARAN (MGMP) PAI SMP"
+                className="w-full p-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-[#087443] focus:ring-1 focus:ring-[#087443] bg-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Alamat Lengkap Sekretariat & Kontak Resmi</span>
+              </span>
+              <span className="text-[11px] font-normal text-slate-400">Dicetak di Kop Dokumen PDF</span>
+            </label>
+            <textarea
+              required
+              rows={2}
+              value={secretariatAddress}
+              onChange={(e) => setSecretariatAddress(e.target.value)}
+              placeholder="Jl. Kedungmungal No. 1, Kab. Mojokerto, Jawa Timur 61382 • Email: mgmppai.mojokerto@gmail.com"
+              className="w-full p-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium text-slate-900 focus:outline-none focus:border-[#087443] focus:ring-1 focus:ring-[#087443] bg-white"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleResetOrg}
+              className="py-2 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Kembalikan ke Default</span>
+            </button>
+
+            <button
+              type="submit"
+              className="py-2 px-4 bg-[#087443] hover:bg-[#065b34] text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Simpan Identitas & Alamat</span>
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* CARD 1: GOOGLE SPREADSHEET & APPS SCRIPT INTEGRATION */}

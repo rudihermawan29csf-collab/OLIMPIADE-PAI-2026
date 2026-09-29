@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
-import { ExamResult, Participant, Exam } from '../types';
+import { ExamResult, Participant } from '../types';
+import { storageService } from '../services/storageService';
 
 export function downloadStudentResultPdf(
   participant: Participant,
@@ -7,6 +8,8 @@ export function downloadStudentResultPdf(
   examTitle?: string
 ): boolean {
   try {
+    const org = storageService.getOrgSettings();
+
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -26,43 +29,73 @@ export function downloadStudentResultPdf(
     doc.setLineWidth(0.3);
     doc.rect(margin - 2.5, margin - 2.5, contentWidth + 5, pageHeight - margin * 2 + 5);
 
-    let y = margin + 5;
+    let y = margin + 4;
 
     // --- KOP SURAT RESMI ---
-    // Decorative Badge / Emblem Icon drawn with vector
+    // Left Emblem Badge: Kemenag Mojokerto
     doc.setFillColor(8, 116, 67);
-    doc.circle(margin + 12, y + 10, 9, 'F');
+    doc.circle(margin + 10, y + 10, 8.5, 'F');
     doc.setFillColor(255, 255, 255);
-    doc.circle(margin + 12, y + 10, 7.5, 'F');
+    doc.circle(margin + 10, y + 10, 7.2, 'F');
+    doc.setFillColor(218, 165, 32); // Gold
+    doc.circle(margin + 10, y + 10, 5.8, 'F');
     doc.setFillColor(8, 116, 67);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text('PAI', margin + 12, y + 12, { align: 'center' });
+    doc.setFontSize(5);
+    doc.setTextColor(255, 255, 255);
+    doc.text('KEMENAG', margin + 10, y + 9.5, { align: 'center' });
+    doc.setFontSize(4);
+    doc.text('IKHLAS', margin + 10, y + 11.5, { align: 'center' });
 
-    // Kop Text
+    // Right Emblem Badge: MGMP PAI Mojokerto
+    doc.setFillColor(8, 116, 67);
+    doc.circle(margin + contentWidth - 10, y + 10, 8.5, 'F');
+    doc.setFillColor(255, 255, 255);
+    doc.circle(margin + contentWidth - 10, y + 10, 7.2, 'F');
+    doc.setFillColor(8, 116, 67);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(30, 41, 59);
-    doc.text('KEMENTERIAN AGAMA REPUBLIK INDONESIA', margin + 28, y + 3);
-
-    doc.setFontSize(12);
+    doc.setFontSize(6);
     doc.setTextColor(8, 116, 67);
-    doc.text('KANTOR KEMENTERIAN AGAMA KABUPATEN MOJOKERTO', margin + 28, y + 9);
+    doc.text('MGMP', margin + contentWidth - 10, y + 9.5, { align: 'center' });
+    doc.setFontSize(5);
+    doc.text('PAI SMP', margin + contentWidth - 10, y + 12, { align: 'center' });
+
+    // Kop Text Centered
+    const centerX = pageWidth / 2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(30, 41, 59);
+    doc.text(org.ministryName || 'KEMENTERIAN AGAMA REPUBLIK INDONESIA', centerX, y + 3, {
+      align: 'center',
+    });
 
     doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    doc.text('MUSYAWARAH GURU MATA PELAJARAN (MGMP) PAI SMP', margin + 28, y + 15);
+    doc.setTextColor(8, 116, 67);
+    doc.text(org.officeName || 'KANTOR KEMENTERIAN AGAMA KABUPATEN MOJOKERTO', centerX, y + 8.5, {
+      align: 'center',
+    });
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(10.5);
+    doc.setTextColor(15, 23, 42);
     doc.text(
-      'Sekretariat: Jl. Kedungmungal No. 1, Kab. Mojokerto, Jawa Timur 61382 • Email: mgmppai.mojokerto@gmail.com',
-      margin + 28,
-      y + 20
+      org.organizationName || 'MUSYAWARAH GURU MATA PELAJARAN (MGMP) PAI SMP',
+      centerX,
+      y + 14,
+      { align: 'center' }
     );
 
-    y += 24;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(
+      org.secretariatAddress ||
+        'Sekretariat: Jl. Kedungmungal No. 1, Kab. Mojokerto, Jawa Timur 61382 • Email: mgmppai.mojokerto@gmail.com',
+      centerX,
+      y + 19,
+      { align: 'center' }
+    );
+
+    y += 23;
 
     // Double Divider Lines
     doc.setDrawColor(8, 116, 67);
@@ -188,10 +221,7 @@ export function downloadStudentResultPdf(
     doc.setTextColor(8, 116, 67);
     headers.forEach((h, i) => {
       const align = i === 0 ? 'center' : i === 1 ? 'left' : 'center';
-      const textX =
-        align === 'center'
-          ? curX + colWidths[i] / 2
-          : curX + 3;
+      const textX = align === 'center' ? curX + colWidths[i] / 2 : curX + 3;
       doc.text(h, textX, y + 4.8, { align: align as any });
       curX += colWidths[i];
     });
@@ -284,83 +314,31 @@ export function downloadStudentResultPdf(
       y += 6.2;
     });
 
-    y += 8;
+    y += 10;
 
-    // --- CATATAN & LEGALITAS ---
+    // --- CATATAN & LEGALITAS RESMI PANITIA ---
     doc.setFillColor(241, 245, 249);
-    doc.roundedRect(margin, y, contentWidth, 14, 2, 2, 'F');
-    doc.setFont('helvetica', 'italic');
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, y, contentWidth, 18, 2, 2, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(8, 116, 67);
+    doc.text('CATATAN PANITIA CBT & KEABSAHAN DOKUMEN:', margin + 4, y + 5);
+
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(71, 85, 105);
     doc.text(
-      'Catatan Panitia: Surat keterangan ini merupakan bukti resmi pengerjaan Ujian CBT Olimpiade PAI SMP Kab. Mojokerto Tahun 2026.',
-      margin + 4,
-      y + 5
-    );
-    doc.text(
-      'Data hasil skor ini telah tersimpan secara permanen pada server basis data panitia MGMP PAI dan Kementerian Agama Kab. Mojokerto.',
+      '1. Surat keterangan ini diterbitkan secara otomatis oleh sistem CBT Olimpiade PAI SMP Kab. Mojokerto Tahun 2026.',
       margin + 4,
       y + 9.5
     );
-
-    y += 18;
-
-    // --- TANDA TANGAN & PENGESAHAN DUA BELAH PIHAK ---
-    const todayFormatted = new Date().toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-
-    const leftColX = margin + 15;
-    const rightColX = margin + contentWidth - 45;
-
-    // Left: Kemenag
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.text('Mengetahui,', leftColX, y, { align: 'center' });
-    doc.text('Seksi PAIS Kemenag Kab. Mojokerto', leftColX, y + 4, { align: 'center' });
-
-    // Right: Panitia MGMP PAI
-    doc.text(`Mojokerto, ${todayFormatted}`, rightColX, y, { align: 'center' });
-    doc.text('Ketua Panitia Olimpiade PAI SMP', rightColX, y + 4, { align: 'center' });
-
-    // Stamp / Digital Signature Box
-    doc.setDrawColor(8, 116, 67);
-    doc.setLineWidth(0.4);
-    doc.roundedRect(leftColX - 22, y + 7, 44, 15, 1, 1, 'D');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(8, 116, 67);
-    doc.text('TERVERIFIKASI SISTEM CBT', leftColX, y + 13, { align: 'center' });
-    doc.setFont('courier', 'normal');
-    doc.setFontSize(6);
-    doc.setTextColor(100, 116, 139);
-    doc.text('KEMENAG KAB. MOJOKERTO', leftColX, y + 17.5, { align: 'center' });
-
-    doc.roundedRect(rightColX - 22, y + 7, 44, 15, 1, 1, 'D');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(8, 116, 67);
-    doc.text('TERVERIFIKASI SISTEM CBT', rightColX, y + 13, { align: 'center' });
-    doc.setFont('courier', 'normal');
-    doc.setFontSize(6);
-    doc.setTextColor(100, 116, 139);
-    doc.text('MGMP PAI KAB. MOJOKERTO', rightColX, y + 17.5, { align: 'center' });
-
-    // Signature Names
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.setTextColor(15, 23, 42);
-    doc.text('( Panitia Seksi PAIS )', leftColX, y + 27, { align: 'center' });
-    doc.text('( Pengurus MGMP PAI )', rightColX, y + 27, { align: 'center' });
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text('NIP. 19780512 200501 1 004', leftColX, y + 31, { align: 'center' });
-    doc.text('NIP. 19820315 200902 1 002', rightColX, y + 31, { align: 'center' });
+    doc.text(
+      '2. Rekapitulasi perolehan nilai dan catatan integritas peserta tersimpan permanen pada server basis data MGMP PAI & Kemenag Kab. Mojokerto.',
+      margin + 4,
+      y + 14
+    );
 
     // --- FOOTER SECURITY BAR ---
     doc.setFont('courier', 'normal');

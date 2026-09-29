@@ -6,7 +6,8 @@ import {
   ViolationLog,
   ExamResult,
   ActivityLog,
-  ViolationType
+  ViolationType,
+  OrgSettings
 } from '../types';
 import { INITIAL_SCHOOLS, INITIAL_QUESTIONS, INITIAL_EXAM } from './seedData';
 import { sheetsSyncService } from './sheetsSyncService';
@@ -20,6 +21,15 @@ const KEYS = {
   RESULTS: 'mgmp_cbt_results',
   LOGS: 'mgmp_cbt_activity_logs',
   OFFLINE_QUEUE: 'mgmp_cbt_offline_queue',
+  ORG_SETTINGS: 'mgmp_cbt_org_settings',
+};
+
+export const DEFAULT_ORG_SETTINGS: OrgSettings = {
+  ministryName: 'KEMENTERIAN AGAMA REPUBLIK INDONESIA',
+  officeName: 'KANTOR KEMENTERIAN AGAMA KABUPATEN MOJOKERTO',
+  organizationName: 'MUSYAWARAH GURU MATA PELAJARAN (MGMP) PAI SMP',
+  secretariatAddress:
+    'Jl. Kedungmungal No. 1, Kab. Mojokerto, Jawa Timur 61382 • Email: mgmppai.mojokerto@gmail.com',
 };
 
 // Event emitter helper for reactive local state updates
@@ -780,6 +790,19 @@ export const storageService = {
   getActivityLogs(limit = 100): ActivityLog[] {
     const logs = getFromStorage<ActivityLog[]>(KEYS.LOGS, []);
     return logs.slice(0, limit);
+  },
+
+  getOrgSettings(): OrgSettings {
+    const data = getFromStorage<OrgSettings>(KEYS.ORG_SETTINGS, DEFAULT_ORG_SETTINGS);
+    return { ...DEFAULT_ORG_SETTINGS, ...data };
+  },
+
+  saveOrgSettings(settings: Partial<OrgSettings>): OrgSettings {
+    const current = this.getOrgSettings();
+    const updated = { ...current, ...settings };
+    setToStorage(KEYS.ORG_SETTINGS, updated);
+    notifyListeners();
+    return updated;
   },
 
   // Reset demo data to initial defaults

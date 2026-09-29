@@ -146,3 +146,13 @@ export interface ActivityLog {
   timestamp: string;
   metadata?: Record<string, any>;
 }
+
+export interface OrgSettings {
+  ministryName: string;
+  officeName: string;
+  organizationName: string;
+  secretariatAddress: string;
+  logoKemenagUrl?: string;
+  logoMgmpUrl?: string;
+}
+
