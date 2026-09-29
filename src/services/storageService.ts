@@ -196,6 +196,15 @@ export const storageService = {
     setToStorage(KEYS.QUESTIONS, list);
     return newQ;
   },
+  saveQuestions(questions: Question[]): void {
+    if (!questions || !Array.isArray(questions) || questions.length === 0) return;
+    const existing = this.getQuestions();
+    const map = new Map<string, Question>();
+    existing.forEach((q) => map.set(q.id, q));
+    questions.forEach((q) => map.set(q.id, q));
+    const merged = Array.from(map.values());
+    setToStorage(KEYS.QUESTIONS, merged);
+  },
   deleteQuestion(id: string): void {
     const list = this.getQuestions().filter((q) => q.id !== id);
     setToStorage(KEYS.QUESTIONS, list);

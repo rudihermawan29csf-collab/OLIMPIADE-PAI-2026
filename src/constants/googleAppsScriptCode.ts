@@ -1,17 +1,17 @@
 export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * ==============================================================================
- * BACKEND GOOGLE APPS SCRIPT - CBT OLIMPIADE PAI SMP KABUPATEN MOJOKERTO
+ * BACKEND & CLOUD DATABASE GOOGLE APPS SCRIPT
+ * CBT OLIMPIADE PAI SMP KABUPATEN MOJOKERTO
  * ==============================================================================
  * Kemenag Kabupaten Mojokerto & MGMP PAI SMP Kabupaten Mojokerto
  *
- * FITUR LENGKAP:
- * 1. setupSheets()     : Otomatis membuat seluruh Sheet & Header Kolom.
- * 2. doPost(e)         : Menerima data kiriman CBT (Hasil Ujian, Bank Soal, Peserta).
- * 3. doGet(e)          : Health check / ping dan pengambilan ringkasan data.
+ * FITUR DATABASE ONLINE MULTI-PERANGKAT:
+ * 1. setupSheets()     : Membuat seluruh Sheet dan Header kolom otomatis.
+ * 2. doPost(e)         : Menerima Soal Baru, Peserta, dan Nilai Siswa dari Perangkat Admin/Siswa.
+ * 3. doGet(e)          : Mengirimkan Soal ke HP Siswa & Nilai ke Laptop Admin (Mendukung JSONP Bebas CORS).
  * ==============================================================================
  */
 
-// Konfigurasi Nama-Nama Sheet
 var SHEET_PESERTA = 'PESERTA';
 var SHEET_HASIL = 'HASIL_UJIAN';
 var SHEET_PELANGGARAN = 'PELANGGARAN';
@@ -121,8 +121,127 @@ function getOrCreateSheet(ss, sheetName) {
 }
 
 /**
- * MENANGANI REQUEST POST DARI APLIKASI CBT
- * Mendukung JSON string via Fetch maupun Formulir HTML Parameter
+ * ==============================================================================
+ * MENANGANI REQUEST GET (PENGAMBILAN DATA ONLINE KE HP SISWA & LAPTOP ADMIN)
+ * Mendukung JSONP agar 100% bebas blokir CORS di semua jenis HP & browser!
+ * ==============================================================================
+ */
+function doGet(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'STATUS';
+  var callback = (e && e.parameter && e.parameter.callback) ? e.parameter.callback : null;
+
+  var response = {
+    status: 'online',
+    appName: 'CBT Olimpiade PAI SMP Kab. Mojokerto',
+    author: 'MGMP PAI & Kemenag Kab. Mojokerto',
+    serverTime: new Date().toISOString()
+  };
+
+  if (action === 'GET_QUESTIONS') {
+    response.questions = getQuestionsFromSheet(ss);
+  } else if (action === 'GET_RESULTS') {
+    response.results = getResultsFromSheet(ss);
+  } else if (action === 'GET_ALL') {
+    response.questions = getQuestionsFromSheet(ss);
+    response.results = getResultsFromSheet(ss);
+  }
+
+  var output = JSON.stringify(response);
+
+  // Jika dipanggil via JSONP
+  if (callback) {
+    return ContentService.createTextOutput(callback + '(' + output + ');')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
+  // Jika dipanggil via fetch biasa
+  return ContentService.createTextOutput(output)
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Mengambil seluruh Bank Soal dari Spreadsheet untuk dikirim ke HP Peserta
+ */
+function getQuestionsFromSheet(ss) {
+  var sheet = ss.getSheetByName(SHEET_BANK_SOAL);
+  if (!sheet) return [];
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
+
+  var list = [];
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    if (!row[0] && !row[4]) continue;
+
+    var optA = row[5] ? String(row[5]) : '';
+    var optB = row[6] ? String(row[6]) : '';
+    var optC = row[7] ? String(row[7]) : '';
+    var optD = row[8] ? String(row[8]) : '';
+    var options = [];
+    if (optA) options.push({ id: 'A', text: optA });
+    if (optB) options.push({ id: 'B', text: optB });
+    if (optC) options.push({ id: 'C', text: optC });
+    if (optD) options.push({ id: 'D', text: optD });
+
+    var rawAnswers = row[9] ? String(row[9]).split(',') : ['A'];
+    var correctAnswers = rawAnswers.map(function(s) { return s.trim(); });
+
+    list.push({
+      id: String(row[0] || ('Q-' + i)),
+      type: row[1] || 'PG',
+      subject: 'Pendidikan Agama Islam',
+      topic: row[2] || 'Materi PAI',
+      difficulty: row[3] || 'Sedang',
+      question: String(row[4] || ''),
+      options: options,
+      correctAnswers: correctAnswers,
+      explanation: String(row[10] || ''),
+      isActive: true,
+      createdAt: new Date().toISOString()
+    });
+  }
+  return list;
+}
+
+/**
+ * Mengambil seluruh Hasil Ujian dari Spreadsheet untuk dikirim ke Laptop Admin
+ */
+function getResultsFromSheet(ss) {
+  var sheet = ss.getSheetByName(SHEET_HASIL);
+  if (!sheet) return [];
+  var values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
+
+  var list = [];
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    if (!row[0]) continue;
+
+    list.push({
+      id: String(row[0]),
+      participantName: String(row[1] || ''),
+      schoolName: String(row[2] || ''),
+      participantNumber: String(row[3] || ''),
+      examTitle: String(row[4] || 'Olimpiade PAI SMP'),
+      score: Number(row[5] || 0),
+      correctCount: Number(row[6] || 0),
+      wrongCount: Number(row[7] || 0),
+      unansweredCount: Number(row[8] || 0),
+      totalQuestions: Number(row[9] || 0),
+      percentage: Number(String(row[10] || '0').replace('%', '')),
+      durationSeconds: Number(row[11] || 0) * 60,
+      submittedAt: row[12] ? new Date(row[12]).toISOString() : new Date().toISOString(),
+      status: Number(row[5] || 0) >= 75 ? 'passed' : 'evaluated'
+    });
+  }
+  return list;
+}
+
+/**
+ * ==============================================================================
+ * MENANGANI REQUEST POST (PENYIMPANAN DATA DARI APLIKASI CBT)
+ * ==============================================================================
  */
 function doPost(e) {
   try {
@@ -172,18 +291,6 @@ function doPost(e) {
   } catch (err) {
     return responseJson({ status: 'error', error: err.toString() });
   }
-}
-
-/**
- * MENANGANI REQUEST GET (Tes Koneksi Browser)
- */
-function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({
-    status: 'online',
-    appName: 'CBT Olimpiade PAI SMP Kab. Mojokerto',
-    author: 'MGMP PAI & Kemenag Kab. Mojokerto',
-    serverTime: new Date().toISOString()
-  })).setMimeType(ContentService.MimeType.JSON);
 }
 
 // Simpan / Update Data Peserta

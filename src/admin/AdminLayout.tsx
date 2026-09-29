@@ -22,9 +22,12 @@ import {
   LogOut,
   Menu,
   X,
-  Shield
+  Shield,
+  RefreshCw
 } from 'lucide-react';
 import { LOGO_KEMENAG_MOJOKERTO, LOGO_MGMP_PAI_MOJOKERTO } from '../constants/branding';
+import { sheetsSyncService } from '../services/sheetsSyncService';
+import { useToast } from '../components/Toast';
 
 interface AdminLayoutProps {
   adminUser: AdminUser;
@@ -37,8 +40,25 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onLogout,
   onGoHome,
 }) => {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+
+  const handleSyncCloud = async () => {
+    setIsSyncingCloud(true);
+    try {
+      const res = await sheetsSyncService.pullAllFromSheets();
+      showToast(
+        `Sinkronisasi cloud selesai! Berhasil memuat data terbaru dari Google Spreadsheet.`,
+        'success'
+      );
+    } catch {
+      showToast('Gagal menarik data dari Google Spreadsheet.', 'error');
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
 
   const menuItems = [
     { id: 'dashboard', label: 'Ringkasan', icon: LayoutDashboard },
@@ -128,7 +148,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           </div>
 
           {/* Admin Identity Card */}
-          <div className="p-3.5 rounded-lg bg-[#EAF8F0] border border-emerald-800/15 mb-5">
+          <div className="p-3.5 rounded-lg bg-[#EAF8F0] border border-emerald-800/15 mb-3">
             <div className="text-[10px] uppercase font-bold text-emerald-900 tracking-wider mb-1 flex items-center gap-1.5">
               <Shield className="w-3.5 h-3.5 text-emerald-700" />
               <span>Admin MGMP PAI</span>
@@ -140,6 +160,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               {adminUser.email}
             </div>
           </div>
+
+          {/* Tombol Sinkronisasi Cloud Dua Arah */}
+          <button
+            type="button"
+            onClick={handleSyncCloud}
+            disabled={isSyncingCloud}
+            className="w-full mb-4 py-2 px-3 bg-white hover:bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-semibold text-emerald-900 transition flex items-center justify-center gap-2 cursor-pointer shadow-2xs disabled:opacity-50"
+            title="Tarik data soal dan hasil ujian terbaru dari Google Spreadsheet"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-emerald-700 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+            <span>{isSyncingCloud ? 'Menyinkronkan...' : 'Sinkronkan Data Cloud'}</span>
+          </button>
 
           {/* Navigation Links */}
           <nav className="space-y-1">

@@ -10,6 +10,7 @@ import { AdminLogin } from './admin/AdminLogin';
 import { AdminLayout } from './admin/AdminLayout';
 import { useAuth } from './hooks/useAuth';
 import { storageService, initStore } from './services/storageService';
+import { sheetsSyncService } from './services/sheetsSyncService';
 import { DEMO_ADMINS } from './services/seedData';
 import { Participant, Exam, ExamResult, AdminUser } from './types';
 
@@ -43,6 +44,12 @@ function MainAppContent() {
   // Initialize seed data
   useEffect(() => {
     initStore();
+
+    // Otomatis tarik Bank Soal dan Hasil terbaru dari Cloud Google Spreadsheet
+    if (sheetsSyncService.isConfigured()) {
+      sheetsSyncService.pullQuestionsFromSheets().catch(() => {});
+      sheetsSyncService.pullResultsFromSheets().catch(() => {});
+    }
 
     // Check if participant was in middle of exam on refresh
     if (studentSession) {

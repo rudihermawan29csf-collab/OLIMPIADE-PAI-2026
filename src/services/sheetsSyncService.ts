@@ -1,4 +1,5 @@
 import { Participant, ExamResult, ViolationLog, Question } from '../types';
+import { storageService } from './storageService';
 
 export const DEFAULT_APPS_SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbzqWOwYOggXLgLmlCi_Gqm8DReSPxwEgKUtsJGoLgrkWn3o5cak9nhiXPB0YVJ-TP1Drg/exec';
@@ -26,7 +27,6 @@ export const sheetsSyncService = {
   /**
    * Mengirim payload ke Google Apps Script Web App
    * Menggunakan kombinasi Fetch text/plain dan Form Post tersembunyi
-   * Form Post penting agar cookie sesi login Google (termasuk akun belajar.id) ikut terkirim
    */
   async sendPayload(action: string, data: any): Promise<boolean> {
     const url = this.getUrl();
@@ -53,8 +53,7 @@ export const sheetsSyncService = {
       console.warn('Sync via fetch warning:', err);
     }
 
-    // 2. Kirim via Hidden HTML Form Submit
-    // Ini mengikutsertakan sesi akun Google yang sedang aktif di browser
+    // 2. Kirim via Hidden HTML Form Submit (membawa cookie sesi browser)
     try {
       if (typeof document !== 'undefined') {
         let iframe = document.getElementById('gscript_sync_iframe') as HTMLIFrameElement;
@@ -87,6 +86,126 @@ export const sheetsSyncService = {
     }
 
     return true;
+  },
+
+  /**
+   * Mengambil data dari Google Apps Script via JSONP
+   * 100% Bebas CORS di semua jenis HP siswa dan browser admin!
+   */
+  async fetchViaJsonp<T>(action: string): Promise<T | null> {
+    const url = this.getUrl();
+    if (!url || typeof document === 'undefined') return null;
+
+    return new Promise((resolve) => {
+      const callbackName = 'gscript_cb_' + Math.random().toString(36).substring(2, 9);
+      const script = document.createElement('script');
+      let timeoutId: any = null;
+
+      (window as any)[callbackName] = (response: any) => {
+        clearTimeout(timeoutId);
+        cleanup();
+        resolve(response as T);
+      };
+
+      const cleanup = () => {
+        delete (window as any)[callbackName];
+        if (script.parentNode) script.parentNode.removeChild(script);
+      };
+
+      timeoutId = setTimeout(() => {
+        cleanup();
+        resolve(null);
+      }, 9000);
+
+      const sep = url.includes('?') ? '&' : '?';
+      script.src = `${url}${sep}action=${action}&callback=${callbackName}&_t=${Date.now()}`;
+      script.onerror = () => {
+        clearTimeout(timeoutId);
+        cleanup();
+        resolve(null);
+      };
+
+      document.body.appendChild(script);
+    });
+  },
+
+  /**
+   * Tarik Bank Soal terbaru dari Google Spreadsheet ke perangkat siswa/admin
+   */
+  async pullQuestionsFromSheets(): Promise<Question[] | null> {
+    if (!this.isConfigured()) return null;
+    try {
+      const resp = await this.fetchViaJsonp<{ status: string; questions?: Question[] }>('GET_QUESTIONS');
+      if (resp && resp.questions && Array.isArray(resp.questions) && resp.questions.length > 0) {
+        // Gabungkan dan simpan ke database lokal perangkat
+        storageService.saveQuestions(resp.questions);
+        return resp.questions;
+      }
+    } catch (err) {
+      console.warn('Gagal menarik soal dari Google Spreadsheet:', err);
+    }
+    return null;
+  },
+
+  /**
+   * Tarik Hasil Ujian terbaru dari Google Spreadsheet ke laptop admin
+   */
+  async pullResultsFromSheets(): Promise<ExamResult[] | null> {
+    if (!this.isConfigured()) return null;
+    try {
+      const resp = await this.fetchViaJsonp<{ status: string; results?: ExamResult[] }>('GET_RESULTS');
+      if (resp && resp.results && Array.isArray(resp.results) && resp.results.length > 0) {
+        const currentResults = storageService.getResults();
+        const merged = [...currentResults];
+        
+        resp.results.forEach((remoteResult) => {
+          const idx = merged.findIndex((r) => r.id === remoteResult.id);
+          if (idx >= 0) {
+            merged[idx] = remoteResult;
+          } else {
+            merged.push(remoteResult);
+          }
+        });
+
+        localStorage.setItem('mgmp_cbt_results', JSON.stringify(merged));
+        return resp.results;
+      }
+    } catch (err) {
+      console.warn('Gagal menarik hasil dari Google Spreadsheet:', err);
+    }
+    return null;
+  },
+
+  /**
+   * Tarik semua data (Soal & Hasil) dari Google Spreadsheet
+   */
+  async pullAllFromSheets(): Promise<{ questionsCount: number; resultsCount: number }> {
+    if (!this.isConfigured()) return { questionsCount: 0, resultsCount: 0 };
+    try {
+      const resp = await this.fetchViaJsonp<{
+        status: string;
+        questions?: Question[];
+        results?: ExamResult[];
+      }>('GET_ALL');
+
+      let qCount = 0;
+      let rCount = 0;
+
+      if (resp?.questions && resp.questions.length > 0) {
+        storageService.saveQuestions(resp.questions);
+        qCount = resp.questions.length;
+      }
+
+      if (resp?.results && resp.results.length > 0) {
+        localStorage.setItem('mgmp_cbt_results', JSON.stringify(resp.results));
+        rCount = resp.results.length;
+      }
+
+      return { questionsCount: qCount, resultsCount: rCount };
+    } catch (err) {
+      console.warn('Pull all error:', err);
+      return { questionsCount: 0, resultsCount: 0 };
+    }
   },
 
   async testConnection(testUrl: string): Promise<boolean> {
