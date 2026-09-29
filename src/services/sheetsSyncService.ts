@@ -2,6 +2,9 @@ import { Participant, ExamResult, ViolationLog, Question } from '../types';
 import { storageService } from './storageService';
 
 export const DEFAULT_APPS_SCRIPT_URL =
+  'https://script.google.com/macros/s/AKfycbx_InSTl85DNt0EauMtqEXmXXwIkEcxVAuTfxtLCmKvA_CbiarWzKr8Tu3cikgo4pELPg/exec';
+
+const OLD_APPS_SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbzqWOwYOggXLgLmlCi_Gqm8DReSPxwEgKUtsJGoLgrkWn3o5cak9nhiXPB0YVJ-TP1Drg/exec';
 
 const STORAGE_KEY_APPS_SCRIPT_URL = 'PAI_APPS_SCRIPT_URL';
@@ -10,7 +13,12 @@ export const sheetsSyncService = {
   getUrl(): string {
     const saved = localStorage.getItem(STORAGE_KEY_APPS_SCRIPT_URL);
     if (saved !== null && saved !== undefined && saved.trim() !== '') {
-      return saved.trim();
+      const clean = saved.trim();
+      if (clean === OLD_APPS_SCRIPT_URL) {
+        localStorage.setItem(STORAGE_KEY_APPS_SCRIPT_URL, DEFAULT_APPS_SCRIPT_URL);
+        return DEFAULT_APPS_SCRIPT_URL;
+      }
+      return clean;
     }
     return DEFAULT_APPS_SCRIPT_URL;
   },
