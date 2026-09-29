@@ -172,6 +172,15 @@ export const storageService = {
     const list = this.getSchools().filter((s) => s.id !== id);
     setToStorage(KEYS.SCHOOLS, list);
   },
+  saveSchools(schools: School[]): void {
+    if (!schools || !Array.isArray(schools) || schools.length === 0) return;
+    const existing = this.getSchools();
+    const map = new Map<string, School>();
+    existing.forEach((s) => map.set(s.id, s));
+    schools.forEach((s) => map.set(s.id, s));
+    const merged = Array.from(map.values());
+    setToStorage(KEYS.SCHOOLS, merged);
+  },
 
   // ---- QUESTIONS ----
   getQuestions(): Question[] {
@@ -270,6 +279,15 @@ export const storageService = {
   deleteExam(id: string): void {
     const list = this.getExams().filter((e) => e.id !== id);
     setToStorage(KEYS.EXAMS, list);
+  },
+  saveExams(exams: Exam[]): void {
+    if (!exams || !Array.isArray(exams) || exams.length === 0) return;
+    const existing = this.getExams();
+    const map = new Map<string, Exam>();
+    existing.forEach((e) => map.set(e.id, e));
+    exams.forEach((e) => map.set(e.id, e));
+    const merged = Array.from(map.values());
+    setToStorage(KEYS.EXAMS, merged);
   },
 
   updateExamSelectedQuestions(examId: string, questionIds: string[]): Exam {
@@ -565,6 +583,15 @@ export const storageService = {
     const all = getFromStorage<ViolationLog[]>(KEYS.VIOLATIONS, []);
     if (!examId) return all;
     return all.filter((v) => v.examId === examId);
+  },
+  saveViolations(violations: ViolationLog[]): void {
+    if (!violations || !Array.isArray(violations) || violations.length === 0) return;
+    const existing = this.getViolations();
+    const map = new Map<string, ViolationLog>();
+    existing.forEach((v) => map.set(v.id, v));
+    violations.forEach((v) => map.set(v.id, v));
+    const merged = Array.from(map.values());
+    setToStorage(KEYS.VIOLATIONS, merged);
   },
 
   // Calculate & finalize test results

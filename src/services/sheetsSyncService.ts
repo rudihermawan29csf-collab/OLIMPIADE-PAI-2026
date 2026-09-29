@@ -1,4 +1,4 @@
-import { Participant, ExamResult, ViolationLog, Question } from '../types';
+import { Participant, ExamResult, ViolationLog, Question, School, Exam } from '../types';
 import { storageService } from './storageService';
 
 export const DEFAULT_APPS_SCRIPT_URL =
@@ -61,7 +61,7 @@ export const sheetsSyncService = {
       console.warn('Sync via fetch warning:', err);
     }
 
-    // 2. Kirim via Hidden HTML Form Submit (membawa cookie sesi browser)
+    // 2. Kirim via Hidden HTML Form Submit (membawa cookie sesi browser akun Google)
     try {
       if (typeof document !== 'undefined') {
         let iframe = document.getElementById('gscript_sync_iframe') as HTMLIFrameElement;
@@ -138,14 +138,63 @@ export const sheetsSyncService = {
   },
 
   /**
-   * Tarik Bank Soal terbaru dari Google Spreadsheet ke perangkat siswa/admin
+   * 1. Sinkronisasi Daftar Sekolah ke Google Spreadsheet
+   */
+  async syncSchools(schools: School[]): Promise<boolean> {
+    if (!this.isConfigured()) return false;
+    return this.sendPayload('SYNC_SCHOOLS', schools);
+  },
+
+  /**
+   * Tarik Daftar Sekolah terbaru dari Google Spreadsheet ke perangkat siswa/admin
+   */
+  async pullSchoolsFromSheets(): Promise<School[] | null> {
+    if (!this.isConfigured()) return null;
+    try {
+      const resp = await this.fetchViaJsonp<{ status: string; schools?: School[] }>('GET_SCHOOLS');
+      if (resp && resp.schools && Array.isArray(resp.schools) && resp.schools.length > 0) {
+        storageService.saveSchools(resp.schools);
+        return resp.schools;
+      }
+    } catch (err) {
+      console.warn('Gagal menarik sekolah dari Google Spreadsheet:', err);
+    }
+    return null;
+  },
+
+  /**
+   * 2. Sinkronisasi Sesi Ujian ke Google Spreadsheet
+   */
+  async syncExams(exams: Exam[]): Promise<boolean> {
+    if (!this.isConfigured()) return false;
+    return this.sendPayload('SYNC_EXAMS', exams);
+  },
+
+  /**
+   * Tarik Sesi Ujian terbaru dari Google Spreadsheet ke perangkat siswa/admin
+   */
+  async pullExamsFromSheets(): Promise<Exam[] | null> {
+    if (!this.isConfigured()) return null;
+    try {
+      const resp = await this.fetchViaJsonp<{ status: string; exams?: Exam[] }>('GET_EXAMS');
+      if (resp && resp.exams && Array.isArray(resp.exams) && resp.exams.length > 0) {
+        storageService.saveExams(resp.exams);
+        return resp.exams;
+      }
+    } catch (err) {
+      console.warn('Gagal menarik sesi ujian dari Google Spreadsheet:', err);
+    }
+    return null;
+  },
+
+  /**
+   * 3. Tarik Bank Soal terbaru dari Google Spreadsheet ke perangkat siswa/admin
    */
   async pullQuestionsFromSheets(): Promise<Question[] | null> {
     if (!this.isConfigured()) return null;
     try {
       const resp = await this.fetchViaJsonp<{ status: string; questions?: Question[] }>('GET_QUESTIONS');
       if (resp && resp.questions && Array.isArray(resp.questions) && resp.questions.length > 0) {
-        // Gabungkan dan simpan ke database lokal perangkat
         storageService.saveQuestions(resp.questions);
         return resp.questions;
       }
@@ -156,7 +205,7 @@ export const sheetsSyncService = {
   },
 
   /**
-   * Tarik Hasil Ujian terbaru dari Google Spreadsheet ke laptop admin
+   * 4. Tarik Hasil Ujian terbaru dari Google Spreadsheet ke laptop admin
    */
   async pullResultsFromSheets(): Promise<ExamResult[] | null> {
     if (!this.isConfigured()) return null;
@@ -185,19 +234,73 @@ export const sheetsSyncService = {
   },
 
   /**
-   * Tarik semua data (Soal & Hasil) dari Google Spreadsheet
+   * 5. Sinkronisasi Pelanggaran Anti-Curang
    */
-  async pullAllFromSheets(): Promise<{ questionsCount: number; resultsCount: number }> {
-    if (!this.isConfigured()) return { questionsCount: 0, resultsCount: 0 };
+  async syncViolation(violation: ViolationLog): Promise<boolean> {
+    if (!this.isConfigured()) return false;
+    return this.sendPayload('SYNC_VIOLATION', violation);
+  },
+
+  async syncViolations(violations: ViolationLog[]): Promise<boolean> {
+    if (!this.isConfigured()) return false;
+    return this.sendPayload('SYNC_VIOLATIONS', violations);
+  },
+
+  /**
+   * Tarik Log Pelanggaran dari Google Spreadsheet
+   */
+  async pullViolationsFromSheets(): Promise<ViolationLog[] | null> {
+    if (!this.isConfigured()) return null;
+    try {
+      const resp = await this.fetchViaJsonp<{ status: string; violations?: ViolationLog[] }>('GET_VIOLATIONS');
+      if (resp && resp.violations && Array.isArray(resp.violations) && resp.violations.length > 0) {
+        storageService.saveViolations(resp.violations);
+        return resp.violations;
+      }
+    } catch (err) {
+      console.warn('Gagal menarik log pelanggaran dari Google Spreadsheet:', err);
+    }
+    return null;
+  },
+
+  /**
+   * Tarik semua data online (Sekolah, Sesi, Soal, Hasil, Pelanggaran) sekaligus
+   */
+  async pullAllFromSheets(): Promise<{
+    schoolsCount: number;
+    examsCount: number;
+    questionsCount: number;
+    resultsCount: number;
+    violationsCount: number;
+  }> {
+    if (!this.isConfigured()) {
+      return { schoolsCount: 0, examsCount: 0, questionsCount: 0, resultsCount: 0, violationsCount: 0 };
+    }
     try {
       const resp = await this.fetchViaJsonp<{
         status: string;
+        schools?: School[];
+        exams?: Exam[];
         questions?: Question[];
         results?: ExamResult[];
+        violations?: ViolationLog[];
       }>('GET_ALL');
 
+      let sCount = 0;
+      let eCount = 0;
       let qCount = 0;
       let rCount = 0;
+      let vCount = 0;
+
+      if (resp?.schools && resp.schools.length > 0) {
+        storageService.saveSchools(resp.schools);
+        sCount = resp.schools.length;
+      }
+
+      if (resp?.exams && resp.exams.length > 0) {
+        storageService.saveExams(resp.exams);
+        eCount = resp.exams.length;
+      }
 
       if (resp?.questions && resp.questions.length > 0) {
         storageService.saveQuestions(resp.questions);
@@ -209,10 +312,21 @@ export const sheetsSyncService = {
         rCount = resp.results.length;
       }
 
-      return { questionsCount: qCount, resultsCount: rCount };
+      if (resp?.violations && resp.violations.length > 0) {
+        storageService.saveViolations(resp.violations);
+        vCount = resp.violations.length;
+      }
+
+      return {
+        schoolsCount: sCount,
+        examsCount: eCount,
+        questionsCount: qCount,
+        resultsCount: rCount,
+        violationsCount: vCount,
+      };
     } catch (err) {
       console.warn('Pull all error:', err);
-      return { questionsCount: 0, resultsCount: 0 };
+      return { schoolsCount: 0, examsCount: 0, questionsCount: 0, resultsCount: 0, violationsCount: 0 };
     }
   },
 
@@ -252,11 +366,6 @@ export const sheetsSyncService = {
     });
   },
 
-  async syncViolation(violation: ViolationLog) {
-    if (!this.isConfigured()) return;
-    return this.sendPayload('SYNC_VIOLATION', violation);
-  },
-
   async syncQuestions(questions: Question[]) {
     if (!this.isConfigured()) return;
     return this.sendPayload('SYNC_QUESTIONS', questions);
@@ -265,8 +374,10 @@ export const sheetsSyncService = {
   async exportAll(payloadData: {
     participants: Participant[];
     results: ExamResult[];
-    exams: any[];
-    questions: any[];
+    exams: Exam[];
+    questions: Question[];
+    schools?: School[];
+    violations?: ViolationLog[];
   }) {
     if (!this.isConfigured()) return false;
     return this.sendPayload('EXPORT_ALL', payloadData);

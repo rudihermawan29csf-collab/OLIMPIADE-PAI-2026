@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { School } from '../types';
 import { storageService } from '../services/storageService';
+import { sheetsSyncService } from '../services/sheetsSyncService';
 import { useToast } from '../components/Toast';
-import { School as SchoolIcon, Plus, Edit2, Trash2, Search, X, MapPin, Hash } from 'lucide-react';
+import { School as SchoolIcon, Plus, Edit2, Trash2, Search, X, MapPin, Hash, Send, RefreshCw } from 'lucide-react';
 
 export const AdminSchools: React.FC = () => {
   const { showToast } = useToast();
   const [schools, setSchools] = useState<School[]>(() => storageService.getSchools());
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchool, setEditingSchool] = useState<School | null>(null);
@@ -18,6 +21,46 @@ export const AdminSchools: React.FC = () => {
 
   const refreshList = () => {
     setSchools(storageService.getSchools());
+  };
+
+  useEffect(() => {
+    if (sheetsSyncService.isConfigured()) {
+      sheetsSyncService.pullSchoolsFromSheets().then((pulled) => {
+        if (pulled && pulled.length > 0) {
+          setSchools(storageService.getSchools());
+        }
+      });
+    }
+  }, []);
+
+  const handleSyncToSheets = async () => {
+    setIsSyncing(true);
+    try {
+      const currentSchools = storageService.getSchools();
+      await sheetsSyncService.syncSchools(currentSchools);
+      showToast(`${currentSchools.length} sekolah berhasil dikirim ke Google Spreadsheet!`, 'success');
+    } catch {
+      showToast('Gagal mengirim daftar sekolah ke Google Spreadsheet.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handlePullFromSheets = async () => {
+    setIsPulling(true);
+    try {
+      const pulled = await sheetsSyncService.pullSchoolsFromSheets();
+      if (pulled && pulled.length > 0) {
+        setSchools(storageService.getSchools());
+        showToast(`Berhasil memuat ${pulled.length} sekolah dari Google Spreadsheet!`, 'success');
+      } else {
+        showToast('Tidak ada data sekolah baru atau koneksi spreadsheet belum aktif.', 'info');
+      }
+    } catch {
+      showToast('Gagal menarik sekolah dari Google Spreadsheet.', 'error');
+    } finally {
+      setIsPulling(false);
+    }
   };
 
   const handleOpenAdd = () => {
@@ -54,6 +97,11 @@ export const AdminSchools: React.FC = () => {
       showToast('Data sekolah berhasil disimpan!', 'success');
       setIsModalOpen(false);
       refreshList();
+
+      // Otomatis kirim pembaruan ke Google Spreadsheet
+      if (sheetsSyncService.isConfigured()) {
+        sheetsSyncService.syncSchools(storageService.getSchools()).catch(() => {});
+      }
     } catch (err) {
       showToast('Gagal menyimpan sekolah.', 'error');
     }
@@ -64,6 +112,11 @@ export const AdminSchools: React.FC = () => {
       storageService.deleteSchool(id);
       showToast('Sekolah telah dihapus.', 'info');
       refreshList();
+
+      // Otomatis update ke Google Spreadsheet
+      if (sheetsSyncService.isConfigured()) {
+        sheetsSyncService.syncSchools(storageService.getSchools()).catch(() => {});
+      }
     }
   };
 
@@ -88,13 +141,37 @@ export const AdminSchools: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAdd}
-          className="flex items-center gap-2 bg-[#087443] hover:bg-[#065b34] text-white px-4 py-2.5 rounded-lg font-medium text-xs shadow-xs transition self-start sm:self-auto cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Tambah Sekolah</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={handlePullFromSheets}
+            disabled={isPulling}
+            className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-2 rounded-lg font-medium text-xs shadow-2xs transition cursor-pointer disabled:opacity-50"
+            title="Tarik daftar sekolah dari Google Spreadsheet"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isPulling ? 'animate-spin' : ''}`} />
+            <span>{isPulling ? 'Menarik...' : 'Tarik dari Spreadsheet'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSyncToSheets}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 px-3.5 py-2 rounded-lg font-bold text-xs transition cursor-pointer disabled:opacity-50"
+            title="Kirim seluruh daftar sekolah ke Google Spreadsheet via Web App"
+          >
+            <Send className="w-3.5 h-3.5 text-emerald-700" />
+            <span>{isSyncing ? 'Mengirim...' : 'Kirim ke Spreadsheet'}</span>
+          </button>
+
+          <button
+            onClick={handleOpenAdd}
+            className="flex items-center gap-2 bg-[#087443] hover:bg-[#065b34] text-white px-4 py-2 rounded-lg font-medium text-xs shadow-xs transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Tambah Sekolah</span>
+          </button>
+        </div>
       </div>
 
       {/* Search Bar */}
